@@ -1,6 +1,5 @@
 #**Computer Vision for the Open Road**
 ###### Galen Ballew, 2017
----
 
 This repository is separated into three parts.
 
