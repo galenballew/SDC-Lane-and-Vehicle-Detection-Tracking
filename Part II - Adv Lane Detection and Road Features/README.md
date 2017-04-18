@@ -140,7 +140,7 @@ Polynomials are great because they are pure mathematics! We can use the formula 
 ---
 ### Results
 
-Now it's time to apply the pipeline to a video! You can check out some footage from [California](https://www.youtube.com/watch?v=8eV1DmNeFeI) or from my hometown of [Chicago!](https://www.youtube.com/watch?v=PlzuzUEjCPc)
+Now it's time to apply the pipeline to a video! You can check out some footage from [California](https://www.youtube.com/watch?v=BLajapkJXVI) or from my hometown of [Chicago!](https://www.youtube.com/watch?v=eFFw32FjUxc)
 
 <center>
 <figure>
