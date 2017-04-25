@@ -1,108 +1,96 @@
-##Writeup Template
-###You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
+# Vehicle Detection and Tracking
+## Galen Ballew, 2017
+
+This repository contains a computer vision and traditional machine learning (i.e. not deep learning) solution to vehicle detection and tracking from dash cam footage in a self driving car. Read a more in-depth article about the project on [Medium](https://medium.com/@galen.ballew).
 
 ---
+### Training a Classifier
 
-**Vehicle Detection Project**
+This project uses training images from a combination of the [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html) and the [KITTI vision benchmark suite](http://www.cvlibs.net/datasets/kitti/). You can download the data sets for [vehicles](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicles](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip) if you want to reimplement this project.  
 
-The goals / steps of this project are the following:
+Let's see what a sample image looks like:
 
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
+<center>
+<figure>
+<img src="saved_figures/car.png" alt="Sample training data"/>
+<figcaption>Fig1. - 64x64 image of a car.</figcaption>
+</figure>
+</center>
 
-[//]: # (Image References)
-[image1]: ./examples/car_not_car.png
-[image2]: ./examples/HOG_example.jpg
-[image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
+A convolutional neural network could learn to detect cars like this pretty easily in an image. It does that by breaking an image down into small convolutions which generate edges. These edges ensemble into shapes and so on. Since we are going to use traditional machine learning algorithms, we need to transform this image into a more meaningful feature space. To do this we will use 3 different feature extraction methods, but first let's convert every image to **the YCrCb color space**. *Y* stands for luminance, *Cr* is the red-difference chroma component, and *Cb* is the blue-difference chroma component. YCrCb is excellent for producing a distinction between surfaces with different levels of light and color, especially compared to grayscale where everything can be muddled. This is what it looks like:
 
-## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
-###Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
+<center>
+<figure>
+<img src="saved_figures/car_notcar.png" alt="YCrCb"/>
+<figcaption>Fig2. - Training datum in YCrCb.</figcaption>
+</figure>
+</center>
 
----
-###Writeup / README
+#### Histogram of color
+This is exactly what you think! Just tally up the values for each color channel across the X-axis. This is useful thinking about a car, but it can lead to false positives if it's the only feature.
 
-####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
+<center>
+<figure>
+<img src="saved_figures/color_hist.png" alt="Histogram of Color Channels"/>
+<figcaption>Fig3. - A histogram of values from each channel.</figcaption>
+</figure>
+</center>
 
-You're reading it!
+#### Spatially Binned Colors
+Another quick and easy feature vector, spatially binned color takes an image, resizes it to a smaller size, then unravels it row by row into a one-dimensional vector. The image loses resolution and segments of the image with similar X values in the image will have the same pixel value in the feature vector.
 
-###Histogram of Oriented Gradients (HOG)
+<center>
+<figure>
+<img src="saved_figures/spatial.png" alt="Spatial Binning"/>
+<figcaption>Fig4. - The position in the vector vs the pixel value.</figcaption>
+</figure>
+</center>
 
-####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
+#### Histogram of Oriented Gradients
+HOG is a really amazing algorithm. You can read about it [here](http://lear.inrialpes.fr/people/triggs/pubs/Dalal-cvpr05.pdf) or watch a [video](https://www.youtube.com/watch?v=7S5qXET179I) by its creator. In a nutshell, HOG takes an image and breaks it down into a grid. Then, in each cell of the grid, every pixel has its gradient direction and magnitude computed. Those gradients are then but into a histogram with a number of bins for possible directions, however gradients with larger magnitudes contribute more than smaller magnitudes. The cell is then assigned the overall gradient direction and magnitude. This algorithm produces a feature vector that can be thought of like a signature for different objects. This is because the grid format helps to preserve structure - it provides a strong signal while reducing noise. If every gradient direction and magnitude were used as input, the signal would be drowned out.
 
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
+<center>
+<figure>
+<img src="saved_figures/hog_comparison.png" alt="HOG"/>
+<figcaption>Fig5. - Histogram of Oriented Gradients.</figcaption>
+</figure>
+</center>
 
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
+What's amazing is that each cell of the HOG looks similar to the edges produced by the low levels of a convolutional neural network! For my project I binned the HOG into **10 directions** and each cell consisted of **8 pixels**. I used the HOG features from **each color channel** as well.
 
-![alt text][image1]
-
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
-
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
-
-
-![alt text][image2]
-
-####2. Explain how you settled on your final choice of HOG parameters.
-
-I tried various combinations of parameters and...
-
-####3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
-
-I trained a linear SVM using...
-
-###Sliding Window Search
-
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
-
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
-
-![alt text][image3]
-
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
-
-![alt text][image4]
----
-
-### Video Implementation
-
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
-
-
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
-
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
-
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+#### Linear SVM
+Now that we have a feature vector for image, we can train a classifier on the training data. I used a **LinearSVM** because it's excellent for classification, but it also *very* fast! It's important that the feature vector is normalized/standardized before being passed to the classifier. I ended up with a validation accuracy of **99%** and it only took **3.48** seconds to train the model.
 
 ---
+### Searching Within a Frame
+Next is the task of using the classifier to identify cars within a frame of dash cam footage. I used a **sliding search window** approach for this. I started by removing the top and bottom of the frame, which contain the sky and the hood of the car - we don't need to look for cars there! Next, I took the HOG feature for the ***entire image*** (this part is important!). Then, the image is split into search windows the same size as the input for the model (64x64 pixels) with an adjustable amount of overlap. Then, each search window pulls out the HOG feature information from the array it was stored in for the entire image - this is ***much less expensive*** than trying to do HOG extraction on every search window! Finally, the model predicts on each search window's feature vector.
 
-###Discussion
+<center>
+<figure>
+<img src="saved_figures/hog_subsampling.png" alt="Car Prediction"/>
+<figcaption>Fig6. - The output from the LinearSVM.</figcaption>
+</figure>
+</center>
+---
+### Heatmaps
+The image above shows multiple detections for each car and a false positive. In order to output a nice, smooth video overlay, we need to track our detections across multiple frames. Heatmaps are an ingenius and simple way to do this. For each frame, there is a matrix of equal size that is filled with zeros. For each bounding box that represents a positive detection, 1 is added to each element inside the box. Thus, areas of the image that are overlapped by multiple detections will produce high values, and false positives will have low values. These areas of high values can then be distinctly separated and a single bounding box can be drawn around them.
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+<center>
+<figure>
+<img src="saved_figures/heatmap_comparison.png" alt="Heatmaps"/>
+<figcaption>Fig7. - Heatmaps can track detections across multiple frames.</figcaption>
+</figure>
+</center>
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+---
+### Results
+By using heatmaps, we can draw a single detection around areas with multiple detections. We can use this multi-frame approach to process video! Check out my footage from [Chicago](https://www.youtube.com/watch?v=dHlw7db-Ceo) or [California](https://youtu.be/bXg2DQe3Oxo)! These videos use the combined pipeline from my previous project. Check that out in [Part II](https://github.com/galenballew/SDC-Lane-and-Vehicle-Detection-Tracking/tree/master/Part%20II%20-%20Adv%20Lane%20Detection%20and%20Road%20Features) of this repository.
 
+---
+### Reflections
+This project is mostly a showcase of the power of being explicit. Often times we think of deep learning as a cure-all, but there are situations where explicit computer vision is much better and traditional machine learning is much faster. This project has a very fast backend, but the drawing of bounding boxes, radius, etc (the image editing) is very slow. I can imagine using a pipeline like this to send information to a robotics system in realtime, but not for displaying a HUD to a driver/passenger. Further, this pipeline is not robust enough to handle the driving conditions that it needs to in order to be useable:
+  1. Going uphill or downhill
+  2. Rain/snow/etc
+  3. Poor lighting conditions
+  4. Roads that have little or no lane markers
+  5. Occlusion by vehicles/signs/etc
